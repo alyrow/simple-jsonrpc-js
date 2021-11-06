@@ -344,7 +344,7 @@
             return message;
         }
 
-        function call(method, params) {
+        function call(method, params, bearer) {
             id += 1;
             var message = {
                 "jsonrpc": "2.0",
@@ -363,11 +363,12 @@
                         reject: reject
                     };
                 }),
-                message: message
+                message: message,
+                bearer: bearer
             };
         }
 
-        self.toStream = function (a) {
+        self.toStream = function (a, b) {
             console.log('Need define the toStream method before use');
             console.log(arguments);
         };
@@ -403,9 +404,9 @@
           delete dispatcher[functionName];
         };
 
-        self.call = function (method, params) {
-            var _call = call(method, params);
-            self.toStream(JSON.stringify(_call.message));
+        self.call = function (method, params, bearer) {
+            var _call = call(method, params, bearer);
+            self.toStream(JSON.stringify(_call.message), _call.bearer);
             return _call.promise;
         };
 
@@ -416,11 +417,13 @@
         self.batch = function (requests) {
             var promises = [];
             var message = [];
+            var bearer = [];
 
             forEach(requests, function (req) {
                 if (req.hasOwnProperty('call')) {
                     var _call = call(req.call.method, req.call.params);
                     message.push(_call.message);
+                    bearer.push(_call.bearer);
                     //TODO(jershell): batch reject if one promise reject, so catch reject and resolve error as result;
                     promises.push(_call.promise.then(function (res) {
                         return res;
@@ -433,7 +436,7 @@
                 }
             });
 
-            self.toStream(JSON.stringify(message));
+            self.toStream(JSON.stringify(message), bearer);
             return _Promise.all(promises);
         };
 
@@ -461,14 +464,14 @@
     /**
      * Static method for simple_jsonrpc for creating a simple_jsonrpc() instance pre-configured
      * for use in a browser, with JSON-RPC over HTTP using standard XHR.
-     * 
+     *
      * Example:
-     *     
+     *
      *     var rpc = simple_jsonrpc.connect_xhr("http://rpc.example.com:8888");
-     *     rpc.call("get_account", ["johndoe"]).then(function(res) { 
+     *     rpc.call("get_account", ["johndoe"]).then(function(res) {
      *         console.log("johndoe full name:", res.full_name)
      *     })
-     * 
+     *
      */
     simple_jsonrpc.connect_xhr = function(rpc_url, rpc_config) {
         if ( typeof rpc_url === "undefined" || rpc_url === null ) rpc_url = "/";
@@ -479,7 +482,7 @@
         if ( !('onerror' in rpc_config) ) rpc_config.onerror = console.error;
         var jrpc = new simple_jsonrpc();
 
-        jrpc.toStream = function(_msg){
+        jrpc.toStream = function(_msg, _bearer){
             var xhr = new XMLHttpRequest();
             xhr.onreadystatechange = function() {
                 if (this.readyState != 4) return;
@@ -495,6 +498,7 @@
 
             xhr.open(rpc_config.method, rpc_url, true);
             xhr.setRequestHeader('Content-type', rpc_config['content-type']);
+            if (_bearer) xhr.setRequestHeader("Authorization", "Bearer " + _bearer);
             xhr.send(_msg);
         };
 
